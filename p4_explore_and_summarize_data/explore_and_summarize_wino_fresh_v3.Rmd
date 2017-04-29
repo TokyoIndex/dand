@@ -1,0 +1,594 @@
+Might Fine Wine
+========================================================
+by Nicholas Cica
+
+The following is my analysis of the Red Wine data set. I will use R and apply exploratory data analysis techniques to explore relationships in one variable to multiple variables and to explore a selected data set for distributions, outliers, and anomalies. 
+
+Exploratory Data Analysis (EDA) is the numerical and graphical examination of data characteristics and relationships before formal, rigorous statistical analyses are applied. EDA can lead to insights, which may uncover to other questions, and eventually predictive models. It also is an important “line of defense” against bad data and is an opportunity to notice that your assumptions or intuitions about a data set are violated.
+
+Let's figure out what kind of features correlate to red wine quality using Data Science!
+
+# Investigate the Data
+
+```{r global_options, include=FALSE}
+# use global options to suppress code, warnings, and messages output by R
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+
+# Load all of the packages that you end up using
+# in your analysis in this code chunk.
+
+# Notice that the parameter "echo" was set to FALSE for this code chunk.
+# This prevents the code from displaying in the knitted HTML output.
+# You should set echo=FALSE for all code chunks in your file.
+
+library(ggplot2)
+library(psych)
+library(grid)
+library(gridExtra)
+library(polycor)
+```
+
+```{r Load_the_Data}
+# Load the Data
+rw <- read.csv("wineQualityReds.csv")
+```
+
+First, let's take a look at the features in the data set, take a look at the internal structure, and sneak a peak at the first six entries:
+
+```{r Investigate_the_Data1}
+names(rw) # Gets the names of the object
+```
+
+There are 13 variables including something called "X".  
+
+```{r Investigate_the_Data2}
+str(rw) # compactly displays the internal structure
+```
+
+Diving a little deeper we can get a glance at the values for each variable. It looks like 'X' is an index. Let's remove it since we won't be using it.
+
+```{r Investigate_the_Data3}
+rw$X <- NULL # Removed the X column
+```
+
+Poof. Gone.
+
+Let's now take a peak at the first six entries to see if we can infer anything from the data.  
+
+```{r Investigate_the_Data4}
+head(rw) # Looks at the first 6 entries
+```
+
+Ok, looking at these first six entries I can get an understanding of the range of values each variable has.  I don't see and obvious missing values, so I think its safe to assume that we can continue with the investigation.
+
+Now I'm going to explore to get a feel for the data.  Hopefully this will give me incite on what assumptions I can make about the data to ease the investigation.  I'll use a histogram to see a distribution of each variable. 
+
+# Univariate Plots Section
+
+The first variable I'll investigate is quality. 
+
+```{r Univariate_Plots1}
+# Create a Histogram with a default binwith of 0.01
+CreateHist <- function(variable, binwidth = 0.01) {
+  return(ggplot(aes_string(x = variable), data = rw) + 
+           geom_histogram(binwidth = binwidth)) 
+}
+
+CreateBar <- function(variable) {
+  return(ggplot(aes_string(x = variable), data = rw) + 
+           geom_bar()) 
+}
+
+#CreateHist('quality', 1)
+CreateBar('quality')
+```
+
+At first glace, there doesn't seem to be much variation outside the middle of the data and there are only 6 different values for quality even though quality looks like its on a 0-10 scale. Since I'll be using quality to understand the correlation between the other features, I should make sure that quality is in a form that is helpful for the investigation.
+
+So let's convert it to something more useful, like a factor and then group it into descriptive categories like bad, average and good.
+
+```{r echo=TRUE, Variables}
+# Create Rating Varible
+rw$rating <- ifelse(rw$quality <= 4, 'bad', ifelse(
+  rw$quality <= 5, 'average', 'good'))
+
+# Properly order the levels of rating in sequencial order
+rw$rating <- ordered(rw$rating,
+                     levels = c('bad', 'average', 'good'))
+
+```
+
+```{r Rating}
+#Set Quality to a factor
+rw$qualityfactor <- factor(rw$quality)
+
+CreateBar('rating')
+```
+
+Each category represents a range in the original numerical scale. The distribution of the 3 categories is 0-4 are "bad", 5 is "average", and 6-8 are "good".
+
+Next, we can look at the distribution of the other features.
+
+## Acidity
+
+```{r Univariate_Plots2}
+# Acid related variables
+
+fa <- CreateHist('fixed.acidity', .1) # g / dm^3
+
+va <- CreateHist('volatile.acidity', 0.01) # g / dm^3
+
+ca <- CreateHist('citric.acid', 0.01) # g / dm^3
+
+ph <- CreateHist('pH', 0.02)
+
+grid.arrange(fa, va, ca, ph)
+```
+
+There are four features associated with acidity: Fixed Acidity, Volatile Acidity, Citric Acid and pH. According to the accompanying descriptions, most of the acids involved with wine are fixed and do not evaporate readily. Volatile acidity is the amount of acetic acid in wine, which can lead to a vinegar taste in high amounts. Citric acid is also found in small quantities and can add a 'freshness factor' and add flavor to the wines.  pH measures the acidic level from a scale of (very acidic) to 14 (very basic) and most wines are between 3-4.  
+
+Therefore, I expect to find low amounts of volatile acidity and citric acid in high quality wines and a normally distributed pH throughout.
+
+Looking at the histograms, there seems to be a similar distribution between fixed acidity and volatile acidity.  This relationship might be worth investigating further.  As expected, pH has a normal distribution.
+
+## Sugar and Chlorides
+
+Next let's look at Residual Sugar and Chlorides.  Residual sugar is the amount of sugar remaining after fermentation stops. It's rare to find wines with less than 1 gram/liter and wines with greater than 45 grams/liter are considered sweet. Conversely, Chlorides are the amount of salt in the wine. 
+
+```{r Univariate_Plots3}
+# Sugar and Salt
+sugar <- CreateHist('residual.sugar', .1)  # g / dm^3
+
+salt <- CreateHist('chlorides') # sodium chloride - g / dm^3
+
+grid.arrange(sugar, salt)
+```
+
+Let's use log10 to transform the plots.
+
+```{r Univariate_Plots4}
+# Sugar and Salt log10
+
+sugar_log10 <- CreateHist('log10(residual.sugar)', .04) # g / dm^3
+
+salt_log10 <- CreateHist('log10(chlorides)', .01) # sodium chloride - g / dm^3
+
+grid.arrange(sugar_log10, salt_log10)
+```
+
+Once Residual Sugar and Chlorides are log10 transformed, they both have a normal distribution. 
+
+## Sulfur Dioxide and Sulphates
+
+The next category is Sulfur Dioxide and Sulphates. Free sulfur dioxide is the free form of SO2 which exists in equilibrium between molecular SO2 (as a dissolved gas) and bisulfite ion.  It prevents microbial growth and the oxidation of wine.  I think that means its a preservative. Total sulfur dioxide is the amount of free and bound forms of S02.  In low concentrations, SO2 is mostly undetectable in wine, but at free SO2 concentrations over 50 ppm, SO2 becomes evident in the nose and taste of wine.  I expect low traces of this.  Finally, sulphates are a wine additive which can contribute to sulfur dioxide gas (S02) levels, and acts as an antimicrobial and antioxidant.
+
+```{r Univariate_Plots5}
+# Sulfur Dioxide and Sulphates
+free_sulf <- CreateHist('free.sulfur.dioxide', 1) # mg / dm^3
+
+total_sulf <- CreateHist('total.sulfur.dioxide', 1) # mg / dm^3
+
+sulfates <- CreateHist('sulphates', 0.1) # g / dm3
+
+grid.arrange(free_sulf, total_sulf, sulfates)
+```
+
+Free and Total Sulfur Dioxide and Sulphates all seem to be positively skewed. 
+
+## Density and Alcohol Content
+
+Last but not least, we have Density and Alcohol. The Density of water is close to that of water depending on the percent alcohol and sugar content.  Finally, alcohol is the percent alcohol content of the wine. 
+
+```{r Univariate_Plots6}
+# Density and Alcohol
+density <- CreateHist('density', 0.001) # g / cm^3
+
+alcohol <- CreateHist('alcohol', 1) # % by volume
+
+grid.arrange(density, alcohol)
+```
+
+Density has a normal distribution and Alcohol also has a normal distribution that is ever so slightly positively skewed.
+
+# Univariate Analysis
+
+#### What is the structure of your dataset?
+
+There are 1599 observations of 12 variables in the wine data set oh which 11 categorical variables that represent the wine's physical and chemical properties and one qualitative variable that represents the objective quality. There is one one additional variable 'X' which appears to be an index.
+
+Additionally, the quality of each wine was rated by an expert who graded the wine quality between 0 (very bad) and 10 (very excellent).  As mentioned above, have created one additional variable, 'rating'.
+
+#### What is/are the main feature(s) of interest in your dataset?
+
+At first glance, the main feature of interest seems to be the quality. The four acidic variables form the features that seem to influence taste the most, which in turn should influence the perceived quality.  However, it is unclear which of the 7 categorical features could influence the quality level at this time.  My investigation will hopefully shed some light onto this.
+
+It is also worth noting again that quality only has a range from 3 - 8 and has a normal distribution. 
+
+#### What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
+
+Acidity, pH and sugar levels might have the greatest influence on the overall taste which might impact the perceived quality.
+
+#### Did you create any new variables from existing variables in the dataset?
+
+I grouped the quality feature into a new variable, "rating", to be used later to a better feel for the data.  This will allow me to compare the other features across three rating levels instead of a quality ranking of 0-10 (3-8).  As mentioned above, each category represents a range in the original numerical scale with a distribution of the 3 categories as 0-4 corresponding to "bad", 5 with "average", and 6-8 to "good".
+
+I also plot chlorides and residual.sugar on a log10 scale.
+
+#### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+
+I investigated chlorides and residual.sugar and used log10 to get a better view of the data. With respect to data munging, the Wine Quality dataset is already considered a "tidy dataset".
+
+# Bivariate Plots Section
+
+Let's create a correlation matrix to get an idea of which features are correlated with each other.
+
+```{r fig.width=10, fig.height=10, Bivariate_Plots0}
+# Create a a scatter plot of matrices (SPLOM),
+# with bivariate scatter plots below the diagonal,
+# histograms on the diagonal, and the Pearson correlation above the diagonal.
+pairs.panels(rw)
+```
+
+This is pretty neat.  We can clearly see that some of the features are positively and negatively correlated.  We will explore this more later.
+
+
+Let's make some box plots to see how the features affect quality. 
+
+```{r Bivariate_Plots1}
+# Create a Boxplot
+CreateBoxplot <- function(variable_y, variable_x) {
+  return(ggplot(aes_string(y = variable_y, x = variable_x),
+                data = rw) + 
+           geom_boxplot())
+}
+
+CreateBoxplot('fixed.acidity', 'qualityfactor')
+```
+
+Ok, its clear we can represent the relationship between the features and quality but since its harder to visualize the variation across 6 (or 10) levels of quality, lets take another look at the box plots with our new "rating" feature and break the visualizations up by type again.
+
+## Acidity
+
+```{r Bivariate_Plots2}
+
+fabox1 <- CreateBoxplot('fixed.acidity', 'rating')
+
+vabox2 <-CreateBoxplot('volatile.acidity', 'rating')
+
+cabox3 <- CreateBoxplot('citric.acid', 'rating') + 
+  scale_y_continuous(breaks = seq(0, 1, 0.1))
+
+phbox <- CreateBoxplot('pH', 'rating')
+
+grid.arrange(fabox1, vabox2, cabox3, phbox)
+```
+
+
+```{r Spearmans Coorelation1}
+
+fabox1_cor <- cat("Spearmans Correlation Coefficient between Fixed Acidity and Quality: ", cor(rw$fixed.acidity, rw$quality, method = "spearman"), '\n')
+
+vabox2_cor <- cat("Spearmans Correlation Coefficient between Volatile Acidity and Quality: ", cor(rw$volatile.acidity, rw$quality, method = "spearman"), '\n')
+
+cabox3_cor <- cat("Spearmans Correlation Coefficient between Citric Acid and Quality: ", cor(rw$citric.acid, rw$quality, method = "spearman"), '\n')
+
+phbox_cor <- cat("Spearmans Correlation Coefficient between pH and Quality: ", cor(rw$pH, rw$quality, method = "spearman"), '\n')
+```
+
+Ok, if we just take a look at the relationship between the acidity and pH, we can see that fixed acidity and citric acidity correlate and fixed acidity and volatile acidity are negatively correlated. pH is almost uniform and the outliers might have some influence over this.
+
+## Sugar and Chlorides
+
+```{r Bivariate_Plots2.5}
+
+rs0 <- CreateBoxplot('residual.sugar', 'rating')
+
+ch0 <-CreateBoxplot('chlorides', 'rating')
+
+grid.arrange(rs0, ch0)
+```
+
+Ouch, that's lot of outliers.  Let's see if we can cleanup the box plots by focusing on the 90th percentile.
+
+```{r Bivariate_Plots3}
+
+#CreateBoxplot('residual.sugar', 'rating')
+
+rs <- ggplot(data=subset(rw, residual.sugar < quantile(rw$residual.sugar, 0.9)),
+       aes(y=residual.sugar, x=rating)) + 
+  geom_boxplot()
+
+#CreateBoxplot('chlorides', 'rating')
+
+ch <- ggplot(data=subset(rw, chlorides < quantile(rw$chlorides, 0.9)),
+       aes(y=chlorides, x=rating)) + 
+  geom_boxplot()
+
+grid.arrange(rs, ch)
+```
+
+```{r Speakmans Coorelation2}
+
+rs_cor <- cat("Spearmans Correlation Coefficient between Residual Sugar and Quality: ", cor(rw$fixed.acidity, rw$quality, method = "spearman"), '\n')
+
+ch_cor <- cat("Spearmans Correlation Coefficient between Chlorides and Quality: ", cor(rw$chlorides, rw$quality, method = "spearman"), '\n')
+```
+
+After removing the outliers, Residual Sugar and Chlorides seem to be more or less equally distributed across the different quality wines.  
+
+## Sulfur Dioxide and Sulphates
+
+I'll focus on the 90th percentile for the remaining box plots.
+
+```{r Bivariate_Plots4}
+
+#CreateBoxplot('free.sulfur.dioxide', 'rating')
+
+fsd <- ggplot(data=subset(rw,
+                   free.sulfur.dioxide < quantile(rw$free.sulfur.dioxide,
+                                                  0.9)),
+       aes(y=free.sulfur.dioxide, x=rating)) + 
+  geom_boxplot()
+
+#CreateBoxplot('total.sulfur.dioxide', 'rating')
+
+tsd <- ggplot(data=subset(rw, sulphates < quantile(rw$sulphates, 0.9)),
+       aes(y=sulphates, x=rating)) + 
+  geom_boxplot()
+
+grid.arrange(fsd, tsd)
+```
+
+```{r Spearmans Coorelation3}
+
+fsd_cor <- cat("Spearmans Correlation Coefficient between Free Sulfur Dioxide and Quality: ", cor(rw$free.sulfur.dioxide, rw$quality, method = "spearman"), '\n')
+
+tsd_cor <- cat("Spearmans Correlation Coefficient between Sulphates and Quality: ", cor(rw$sulphates, rw$quality, method = "spearman"), '\n')
+```
+
+Removing the outliers for Sulfur Dioxide and Sulphates gives us a better look at the distribution.  Sulphur Dioxide appears to be slightly normally distributed while sulphates are negatively skewed.
+
+## Density and Alcohol
+
+```{r Bivariate_Plots5}
+#CreateBoxplot('density', 'rating')
+
+den <- ggplot(data=subset(rw, density < quantile(rw$density, 0.9)),
+       aes(y=density, x=rating)) + 
+  geom_boxplot()
+
+#CreateBoxplot('alcohol', 'rating')
+
+alco <- ggplot(data=subset(rw, alcohol < quantile(rw$alcohol, 0.9)),
+       aes(y=alcohol, x=rating)) + 
+  geom_boxplot()
+
+grid.arrange(den, alco)
+```
+
+```{r Spearmans Coorelation4}
+
+den_cor <- cat("Spearmans Correlation Coefficient between Density and Quality: ", cor(rw$density, rw$quality, method = "spearman"), '\n')
+
+alco_cor <- cat("Spearmans Correlation Coefficient between Alcohol and Quality: ", cor(rw$alcohol, rw$quality, method = "spearman"), '\n')
+```
+
+Now, after accounting for outliers, density seems consistent across the rating levels and alcohol volume seems to decrease for the average wine but remains high for both the bad wine and the good wine.  
+
+Finally, we should also plot other bivariate relationships with more depth by taking a scatter plot of two variables.
+
+```{r Bivariate_Plots6}
+# Create a Scatterplot
+CreatePoint <- function(variable_x, variable_y) {
+  return(ggplot(aes_string(x = variable_x, y = variable_y),
+                data = rw) +  
+           geom_point(alpha = 0.5, size = 1, position = 'jitter'))
+}
+
+bv1 <- CreatePoint('citric.acid', 'volatile.acidity')
+
+bv2 <- CreatePoint('citric.acid', 'sulphates')
+
+bv3 <- CreatePoint('volatile.acidity', 'sulphates')
+
+bv4 <- CreatePoint('volatile.acidity', 'alcohol')
+
+grid.arrange(bv1, bv2, bv3, bv4)
+```
+
+```{r Coorelation5}
+
+bv1_cor <- cor(rw$citric.acid, rw$volatile.acidity, method = "spearman")
+
+bv2_cor <- cor(rw$citric.acid, rw$sulphates, method = "spearman")
+
+bv3_cor <- cor(rw$volatile.acidity, rw$sulphates, method = "spearman")
+
+bv4_cor <- cor(rw$volatile.acidity, rw$alcohol, method = "spearman")
+
+cat("Spearmans Correlation Coefficient between Citric Acid and Volitile Acidity: ", bv1_cor, "\n")
+
+cat("Spearmans Correlation Coefficient between Citric Acid and Sulphates: ", bv2_cor, "\n")
+
+cat("Spearmans Correlation Coefficient between Volatile Acidity and Sulphates: ", bv3_cor, "\n")
+
+cat("Spearmans Correlation Coefficient between Volatile Acidity and Alcohol: ", bv4_cor, "\n")
+```
+
+The relationship between the volatile acidity and citric acid and the relationship between sulphates and citric acid is a little difficult to see with these Bivariate scatter plots.  I should add another variable in the next section to improve the data visualization.
+
+But first, let's answer some more questions about the bivariate plots.
+
+# Bivariate Analysis
+
+#### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?
+
+These box plots give us an idea of what features generally are associated with higher quality wine. I was able to quickly identify which features have a positive and negative correlation with the quality of the wine:
+
+ - fixed acidity, citric acid, and sulfates have a positive correlation
+
+ - volatile acidity has a negative correlation
+
+The reason volatile acidity seems to have a negative correlation with wine quality is evident in the literature.  "The amount of acetic acid in wine, which at too high of levels can lead to an unpleasant, vinegar taste."
+
+As for the positive correlated features, the literature also tells us that citric acid can add 'freshness' and flavor to wines and sulphates acts as an antimicrobial and antioxidant.  If wine is anything like beer, I know that I enjoy a beer with a stronger alcohol content (to a point).  
+
+#### Did you observe any interesting relationships between the other features (not the main feature(s) of interest)?
+
+The correlation matrix is key in showing the relationships between the other features.  The most noticeable relationship was how fixed acidity is correlated with density (positive),  citric acid (positive) and pH (negative).  This makes sense since high acidity would lead to a low pH level.
+
+#### What was the strongest relationship you found?
+
+Fixed Acidity and pH have the strongest negative relationship with a correlation of -0.68.
+
+# Multivariate Plots Section
+
+Let's focus on the scatter plots from the previous section and add the rating variable to help visualize the relationships with the quality of wine. 
+
+```{r Multivariate_Plots1}
+# Create a Scatterplot
+CreatePoint <- function(variable_x, variable_y, color) {
+  return(ggplot(aes_string(x = variable_x, y = variable_y, color = color),
+                data = rw) +  
+           geom_point(alpha = 0.5, size = 1, position = 'jitter') +
+           scale_colour_brewer() +
+           geom_smooth(method=lm, se=FALSE)) # Add linear regression line
+}
+```
+
+I added some best fit linear regression lines to see if we can see some pattern in the data by rating. 
+
+``` {r Multivariate_Plots2}
+
+mv1 <- CreatePoint('citric.acid', 'volatile.acidity', 'rating')
+
+mv2 <- CreatePoint('citric.acid', 'sulphates', 'rating')
+
+mv1 
+mv2
+```
+
+At a glance we can see how the Average wine is situated between the Bad and Good wine. From these plots, we can see how volatile acidity and citric acid are positively correlated and how sulphates and citric acid are negatively correlated.  Addtionally, the ratio of sulphates to citric acid is much larger for the bad wine.
+
+``` {r Multivariate_Plots3}
+
+mv3 <- CreatePoint('volatile.acidity', 'sulphates', 'rating')
+
+mv4 <- CreatePoint('volatile.acidity', 'alcohol', 'rating')
+
+mv3 
+mv4
+```
+
+Sometimes there is too much of an overlap to really understand where the data can be cleanly separated. Additionally, it appears that the linear regression lines for the alcohol and volatile acidity do not follow the expected pattern of bad, average, good and instead the bad wine is situated between the good and average wine.
+
+``` {r Multivariate_Plots4}
+
+mv5 <- CreatePoint('sulphates', 'alcohol', 'rating')
+ 
+mv6 <- CreatePoint('pH', 'alcohol', 'rating')
+
+mv5
+mv6
+```
+
+
+```{r Spearmans Coorelation7}
+
+den_cor <- cat("Spearmans Correlation Coefficient between Alcohol and Sulphates: ", cor(rw$alcohol, rw$sulphates, method = "spearman"), '\n')
+
+alco_cor <- cat("Spearmans Correlation Coefficient between pH and Alcohol: ", cor(rw$pH, rw$alcohol, method = "spearman"), '\n')
+```
+
+
+Other times, there is a clear difference and the linear regression lines up in the expected rating order.  I wonder what factors lead to the linear regression lines slope for the bad wine appearing steeper than the good and average wines.  
+
+# Multivariate Analysis
+
+#### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your feature(s) of interest?
+
+We have been using Rating to differentiate between the other features across a common denominator.  Therefore, I used Rating to help label the data as we compare the relationship between other features. 
+
+Overall, the features allow us to distinguish between bad wines and good wines but because of the range of average wines, its harder to distinguish between a bad wine and an average wine and a average wine and a good wine.
+
+#### Were there any interesting or surprising interactions between features?
+
+There were a few relationships such as citric acid and rating that were clearly correlated in the bivariate analysis but were not clear represented in the multivariate analysis. 
+
+
+------
+
+# Final Plots and Summary
+
+In this final section, I will polish three previous plots from above and provide additional feedback.
+
+### Plot One
+```{r Plot_One}
+# Create a Histogram
+ggplot(data=rw, aes(rw$alcohol)) + 
+  geom_histogram(col="black", 
+                 aes(fill=..count..),
+                 binwidth = 0.3) + 
+  scale_fill_gradient("count", low = "green", high = "red") + 
+  xlab("Alcohol (% Volume)") + 
+  ylab("Count") + 
+  ggtitle("Distribution of Alcohol") + 
+  guides(fill=FALSE)
+
+summary(rw$alcohol)
+```
+
+#### Description One
+
+For this histogram, I've added additional detail which highlighting the distribution of Alcohol (by volume). The volume of alcohol ranges from 8.40% to 14.90% with a median value of 10.42%. Additionally, there is an intense peak around 9% of about 240 wines and then a steady decrease at 10% to 12% alcohol and so on.
+
+### Plot Two
+```{r Plot_Two}
+# Create a Bloxplot
+ggplot(data=rw, aes(y=citric.acid, x=rating)) + 
+  geom_boxplot(aes(fill = rating)) + 
+  ylab("Citric Acidity (g / dm^3)") + 
+  xlab("Rating") + 
+  ggtitle("Wine Rating by Citric Acidity") + 
+  guides(fill=FALSE)
+
+plot2_cor <- cor(rw$citric.acid, as.numeric(rw$rating))
+
+cat("Correlation between Citric acid and Rating: ", plot2_cor)
+```
+
+#### Description Two
+
+I've refined this visualization box plot because this particular plot shows one of the strongest correlations between a feature and the rating variable. While Citric Acidity isn't the only factor that goes into producing a quality wine, it does show a incremental increase in the quality.
+
+### Plot Three
+```{r Plot_Three}
+# Create a Scatterplot
+ggplot(data = subset(rw, rating !="average"),
+        aes(x = citric.acid, y = volatile.acidity,
+            color = rating)) +
+   geom_point(alpha = 0.5, size = 1, position = 'jitter') +
+   geom_smooth(method=lm, se=FALSE) +
+   ggtitle("Citric Acid vs. Volatile Acidity by Wine Rating") +
+   xlab("Citric Acid (g / dm^3)") +
+   ylab("Volatile Acidity (g / dm^3)") +
+   scale_colour_brewer(palette = "Dark2")
+
+plot3_cor <- cor(rw$citric.acid, rw$volatile.acidity) # apply the cor function
+
+cat("Correlation between Citric acid and Volatile Acidity: ", plot3_cor)
+```
+
+#### Description Three
+
+In the final plot, I have enhanced the scatter plot of the Citric Acid and Volatile Acid variables by removing the "Average" wines. This highlights the differences between the Good Wine and the Bad Wine and the linear regression line separates the data is now more apparent. Additionally, the two variables have a higher correlation than many of the other variables at -0.55.  Overall, higher quality wines have a lower concentration of both Volatile Acidity and Citric Acid.
+
+------
+
+# Reflection
+
+Exploring the data requires a lot of trial and error and it can be difficult and time consuming to manually explore the data and look for patterns. Being able to take advantage of existing R library like psych allowed me to quickly overcome this roadblock and dial in on in the feature correlations. I found that the exploration became easier if I focused on utilizing the investigation techniques that are frequently used instead of reinventing the process.
+
+Thinking about the relationships in the data,forming a hypothesis and exploring these relationships yielded exciting results. I really enjoyed interpreting the data to trying and understand what features are correlated features.  
+
+I'm most excited about the implications that come from automating this process with machine learning.  We should be able to find out all kinds of things from data!

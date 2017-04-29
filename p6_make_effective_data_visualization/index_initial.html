@@ -1,0 +1,27 @@
+<html>
+  <style> 
+        h2 {
+            color: black;
+            text-align: center;
+        }
+    </style>
+
+  <h2>Survivor: Titanic</h2>
+
+<div id="chartContainer">
+  <script src="http://d3js.org/d3.v4.min.js"></script>
+  <script src="http://dimplejs.org/dist/dimple.v2.3.0.min.js"></script>
+  <script type="text/javascript">
+
+    var svg = dimple.newSvg("#chartContainer", 590, 400);
+    d3.csv("/data/titanic_data.csv", function (data) {
+      var myChart = new dimple.chart(svg, data);
+        var x = myChart.addCategoryAxis("x", "Sex"); 
+        myChart.addMeasureAxis("y", "Survived");
+        myChart.addSeries("Pclass", dimple.plot.bar);
+        myChart.draw();
+    });
+  </script>
+
+</div>
+</html>

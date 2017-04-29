@@ -1,0 +1,59 @@
+<html>
+  <style> 
+        h2 {
+            color: black;
+            text-align: center;
+        }
+        p {
+            color: black;
+            text-align: center;
+        }
+    </style>
+
+  <h2>Titanic Survival Rate by Gender and Passenger Class</h2>
+  <p>Hover your mouse over each bar on the chart for the exact passenger survival rates</p>
+
+
+<div id="chartContainer">
+  <script src="http://d3js.org/d3.v4.min.js"></script>
+  <script src="http://dimplejs.org/dist/dimple.v2.3.0.min.js"></script>
+  <script type="text/javascript">
+
+    // Create a Bar Graph showing the Percenage of Surviors by Gender and Passenger Class
+    var svg = dimple.newSvg("#chartContainer", 1200, 400);
+    // Import Data from CSV file
+    d3.csv("/data/titanic_data_v5.csv", function (data) {
+      // Create Instance of the chart
+      var myChart = new dimple.chart(svg, data);
+      // Set the dimentions of the chart
+      myChart.setBounds(380, 30, 600, 235);
+      myChart.defaultColors = [
+        new dimple.color("#b0e0e6"), // blue
+        new dimple.color("#E6B6B0")  // red
+        ]; 
+      // Set the X Axis as Categorical with Grouped
+      var x = myChart.addCategoryAxis("x", "Group");
+      // Order the X Axis by Age/Sex/Passanger Class in Accending Order
+      x.addOrderRule(['Male Adult, Second Class', 'Male Adult, Third Class', 'Male Child, Third Class', 'Female Adult, Third Class',
+        'Male Adult, First Class', 'Female Child, Third Class', 'Male Child, Second Class', 'Male Child, First Class',
+        'Female Adult, Second Class', 'Female Child, First Class', 'Female Adult, First Class', 'Female Child, Second Class']);
+      // Set the Y Axis to Percent with PassengerId (Ratio)
+      var y = myChart.addPctAxis("y", "Ratio");
+      // Change the Y Axis title to Passenger %
+      y.title = "Passenger %";
+      // Facet the data by Survived and plot a Bar Graph
+      var s = myChart.addSeries("Status", dimple.plot.bar);
+      // Reorder the Stack Bar Chart with Survivors on the bottom
+      s.addOrderRule(["Survived", "Not Survived"]);
+      myChart.addLegend(65, 10, 510, 20, "right");
+      // Add stagger drawing
+      myChart.staggerDraw = true;
+      // Add transition time of 1000 ms
+      myChart.draw(1000);
+
+
+    });
+  </script>
+
+</div>
+</html>
